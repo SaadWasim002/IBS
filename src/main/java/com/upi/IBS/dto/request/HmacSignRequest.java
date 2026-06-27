@@ -29,4 +29,7 @@ public class HmacSignRequest {
     @Positive(message = "amount_paise must be positive")
     @JsonProperty("amount_paise")
     private Long amountPaise;
+
+    @JsonProperty("upi_pin_hash")
+    private String upiPinHash;
 }
