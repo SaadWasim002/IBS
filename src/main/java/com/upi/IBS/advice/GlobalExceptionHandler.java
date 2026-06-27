@@ -2,7 +2,6 @@ package com.upi.IBS.advice;
 
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.exception.*;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -10,102 +9,58 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.stream.Collectors;
-
-@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccountNotFoundException.class)
-    public ResponseEntity<BankResponse> handleAccountNotFound(AccountNotFoundException e) {
-        log.warn("AccountNotFoundException: {}", e.getMessage());
+    public ResponseEntity<BankResponse> handleNotFound(AccountNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("ACCOUNT_NOT_FOUND")
-                        .build());
-    }
-
-    @ExceptionHandler(AccountLockedException.class)
-    public ResponseEntity<BankResponse> handleAccountLocked(AccountLockedException e) {
-        log.warn("AccountLockedException: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("ACCOUNT_LOCKED")
-                        .build());
+                .body(BankResponse.failure("ACCOUNT_NOT_FOUND", null));
     }
 
     @ExceptionHandler(InsufficientBalanceException.class)
-    public ResponseEntity<BankResponse> handleInsufficientBalance(InsufficientBalanceException e) {
-        log.warn("InsufficientBalanceException: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("INSUFFICIENT_BALANCE")
-                        .build());
+    public ResponseEntity<BankResponse> handleInsufficientBalance(InsufficientBalanceException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(BankResponse.failure("INSUFFICIENT_BALANCE", null));
     }
 
     @ExceptionHandler(InvalidPinException.class)
-    public ResponseEntity<BankResponse> handleInvalidPin(InvalidPinException e) {
-        log.warn("InvalidPinException: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("INVALID_PIN")
-                        .build());
+    public ResponseEntity<BankResponse> handleInvalidPin(InvalidPinException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(BankResponse.failure("INVALID_PIN", null));
+    }
+
+    @ExceptionHandler(AccountLockedException.class)
+    public ResponseEntity<BankResponse> handleLocked(AccountLockedException ex) {
+        return ResponseEntity.status(HttpStatus.LOCKED)
+                .body(BankResponse.failure("ACCOUNT_LOCKED", null));
     }
 
     @ExceptionHandler(LimitExceededException.class)
-    public ResponseEntity<BankResponse> handleLimitExceeded(LimitExceededException e) {
-        log.warn("LimitExceededException: {}", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("LIMIT_EXCEEDED")
-                        .build());
+    public ResponseEntity<BankResponse> handleLimit(LimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(BankResponse.failure("LIMIT_EXCEEDED", null));
     }
 
     @ExceptionHandler(DuplicateTransactionException.class)
-    public ResponseEntity<BankResponse> handleDuplicateTransaction(DuplicateTransactionException e) {
-        log.warn("DuplicateTransactionException: {}", e.getMessage());
+    public ResponseEntity<BankResponse> handleDuplicate(DuplicateTransactionException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("409 DUPLICATE")
-                        .build());
+                .body(BankResponse.failure("DUPLICATE_TRANSACTION", null));
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-    public ResponseEntity<BankResponse> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException e) {
-        log.error("Optimistic locking failure: {}", e.getMessage());
+    public ResponseEntity<BankResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("CONCURRENT_UPDATE_CONFLICT")
-                        .build());
+                .body(BankResponse.failure("CONCURRENT_MODIFICATION", null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<BankResponse> handleValidationExceptions(MethodArgumentNotValidException e) {
-        String errors = e.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-        log.warn("Validation failed: {}", errors);
+    public ResponseEntity<BankResponse> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .findFirst()
+                .orElse("Validation failed");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("VALIDATION_FAILED: " + errors)
-                        .build());
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<BankResponse> handleGeneralException(Exception e) {
-        log.error("Unhandled exception occurred", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(BankResponse.builder()
-                        .status("FAILURE")
-                        .failureReason("INTERNAL_SERVER_ERROR")
-                        .build());
+                .body(BankResponse.failure(message, null));
     }
 }

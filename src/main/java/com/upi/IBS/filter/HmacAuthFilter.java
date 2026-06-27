@@ -41,7 +41,8 @@ public class HmacAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        if ("/bank/sign".equals(request.getRequestURI())) {
+        String uri = request.getRequestURI();
+        if ("/bank/sign".equals(uri) || "/bank/test/add-account".equals(uri)) {
             filterChain.doFilter(request, response);
             return;
         }

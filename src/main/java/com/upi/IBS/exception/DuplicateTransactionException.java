@@ -1,7 +1,9 @@
-package com.upi.IBS.exception;
+    package com.upi.IBS.exception;
+
+import java.util.UUID;
 
 public class DuplicateTransactionException extends RuntimeException {
-    public DuplicateTransactionException(String message) {
-        super(message);
+    public DuplicateTransactionException(UUID transactionId) {
+        super("Transaction already processed: " + transactionId);
     }
 }
