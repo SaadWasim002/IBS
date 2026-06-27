@@ -30,6 +30,7 @@ public class LedgerEntry {
     private Account account;
 
     @Enumerated(EnumType.STRING)
+    @org.hibernate.annotations.JdbcType(org.hibernate.dialect.PostgreSQLEnumJdbcType.class)
     @Column(name = "type", nullable = false, updatable = false,
             columnDefinition = "entry_type")
     private EntryType type;

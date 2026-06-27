@@ -4,12 +4,18 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
 @Data
-public class DebitRequest {
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class HmacSignRequest {
 
     @NotNull(message = "transaction_id is required")
     @JsonProperty("transaction_id")
@@ -20,15 +26,7 @@ public class DebitRequest {
     private String accountVpa;
 
     @NotNull(message = "amount_paise is required")
-    @Positive(message = "amount_paise must be greater than zero")
+    @Positive(message = "amount_paise must be positive")
     @JsonProperty("amount_paise")
     private Long amountPaise;
-
-    @NotBlank(message = "upi_pin_hash is required")
-    @JsonProperty("upi_pin_hash")
-    private String upiPinHash;
-
-    @NotBlank(message = "hmac_signature is required")
-    @JsonProperty("hmac_signature")
-    private String hmacSignature;
 }

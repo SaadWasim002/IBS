@@ -2,6 +2,8 @@ server:
   port: 3003
 
 spring:
+  profiles:
+    active: dev
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
