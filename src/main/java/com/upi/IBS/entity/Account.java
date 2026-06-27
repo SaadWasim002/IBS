@@ -1,4 +1,4 @@
-package com.upi.bank.entity;
+package com.upi.IBS.entity; 
 
 import jakarta.persistence.*;
 import lombok.Getter;

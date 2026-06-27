@@ -1,6 +1,6 @@
-package com.upi.bank.repository;
+package com.upi.IBS.repository;
 
-import com.upi.bank.entity.Account;
+import com.upi.IBS.entity.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
