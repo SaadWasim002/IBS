@@ -99,7 +99,7 @@ class BankControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.rrn").value("RRN123456789012"))
-                .andExpect(jsonPath("$.failure_reason").isEmpty());
+                .andExpect(jsonPath("$.failure_reason").doesNotExist());
     }
 
     @Test
@@ -152,7 +152,7 @@ class BankControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.rrn").value("RRN999999999999"))
-                .andExpect(jsonPath("$.failure_reason").isEmpty());
+                .andExpect(jsonPath("$.failure_reason").doesNotExist());
     }
 
     @Test
