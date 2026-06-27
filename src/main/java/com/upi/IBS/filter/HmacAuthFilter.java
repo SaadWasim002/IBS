@@ -41,6 +41,11 @@ public class HmacAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        if ("/bank/sign".equals(request.getRequestURI())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // Use custom wrapper to read request body without consuming the stream permanently
         CachedBodyHttpServletRequest requestWrapper = new CachedBodyHttpServletRequest(request);
         String bodyString = new String(requestWrapper.getCachedBody(), StandardCharsets.UTF_8);
