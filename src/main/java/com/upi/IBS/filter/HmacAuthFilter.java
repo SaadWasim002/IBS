@@ -10,7 +10,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.ServletInputStream;
+import jakarta.servlet.ReadListener;
+import java.io.ByteArrayInputStream;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -45,10 +48,8 @@ public class HmacAuthFilter extends OncePerRequestFilter {
         }
 
         // Use custom wrapper to read request body without consuming the stream permanently
-        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request);
-
-        // Read body AFTER wrapping — let the wrapper cache it
-        String bodyString = new String(requestWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
+        CachedBodyHttpServletRequest requestWrapper = new CachedBodyHttpServletRequest(request);
+        String bodyString = new String(requestWrapper.getCachedBody(), StandardCharsets.UTF_8);
 
         // For GET requests or empty bodies — skip HMAC check
         if (bodyString.isEmpty()) {
@@ -100,5 +101,43 @@ public class HmacAuthFilter extends OncePerRequestFilter {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType("application/json");
         response.getWriter().write("{\"error\": \"" + message + "\"}");
+    }
+
+    private static class CachedBodyHttpServletRequest extends HttpServletRequestWrapper {
+        private final byte[] cachedBody;
+
+        public CachedBodyHttpServletRequest(HttpServletRequest request) throws IOException {
+            super(request);
+            this.cachedBody = request.getInputStream().readAllBytes();
+        }
+
+        @Override
+        public ServletInputStream getInputStream() {
+            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(this.cachedBody);
+            return new ServletInputStream() {
+                @Override
+                public boolean isFinished() {
+                    return byteArrayInputStream.available() == 0;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setReadListener(ReadListener readListener) {
+                }
+
+                @Override
+                public int read() {
+                    return byteArrayInputStream.read();
+                }
+            };
+        }
+
+        public byte[] getCachedBody() {
+            return this.cachedBody;
+        }
     }
 }

@@ -1,6 +1,12 @@
 package com.upi.IBS.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.upi.IBS.dto.request.CreditRequest;
+import com.upi.IBS.dto.response.BankResponse;
+import com.upi.IBS.entity.LedgerEntry;
+import com.upi.IBS.service.BankService;
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import com.upi.IBS.dto.request.HmacSignRequest;
 import com.upi.IBS.dto.request.DebitRequest;
 import com.upi.IBS.dto.response.HmacSignResponse;
@@ -9,11 +15,14 @@ import com.upi.IBS.service.BankService;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.util.Optional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -28,6 +37,7 @@ public class BankController {
 
     private final ObjectMapper objectMapper;
     private final String hmacSecret;
+    private final BankService bankService;
     private final BankService bankService;
 
     @Autowired
@@ -51,6 +61,9 @@ public class BankController {
             payloadMap.put("transaction_id", request.getTransactionId().toString());
             payloadMap.put("account_vpa", request.getAccountVpa());
             payloadMap.put("amount_paise", request.getAmountPaise());
+            if (request.getUpiPinHash() != null) {
+                payloadMap.put("upi_pin_hash", request.getUpiPinHash());
+            }
 
             // Serialize to JSON string
             String payloadJson = objectMapper.writeValueAsString(payloadMap);
@@ -66,6 +79,7 @@ public class BankController {
                     .transactionId(request.getTransactionId())
                     .accountVpa(request.getAccountVpa())
                     .amountPaise(request.getAmountPaise())
+                    .upiPinHash(request.getUpiPinHash())
                     .hmacSignature(signature)
                     .build();
 
@@ -73,6 +87,27 @@ public class BankController {
         } catch (Exception e) {
             log.error("Error generating HMAC signature", e);
             throw new RuntimeException("HMAC generation failed", e);
+        }
+
+        @PostMapping("/bank/credit")
+    public ResponseEntity<BankResponse> credit(@Valid @RequestBody CreditRequest request) {
+        try {
+            BankResponse response = bankService.processCredit(request);
+            return ResponseEntity.ok(response);
+        } catch (DataIntegrityViolationException e) {
+            log.info("DataIntegrityViolationException caught (possible concurrent duplicate request). Attempting idempotent recovery for transaction ID: {}", request.getTransactionId());
+            Optional<LedgerEntry> existing = bankService.getLedgerEntryByTransactionId(request.getTransactionId());
+            if (existing.isPresent()) {
+                log.info("Idempotent recovery successful. Returning existing transaction details with RRN: {}", existing.get().getRrn());
+                BankResponse response = BankResponse.builder()
+                        .status("SUCCESS")
+                        .rrn(existing.get().getRrn())
+                        .failureReason(null)
+                        .build();
+                return ResponseEntity.ok(response);
+            }
+            // If it wasn't a duplicate transaction ID violation, rethrow the exception
+            throw e;
         }
     }
 }
