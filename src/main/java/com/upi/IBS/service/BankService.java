@@ -74,11 +74,7 @@ public class BankService {
             if (!existingEntries.isEmpty()) {
                 LedgerEntry existingEntry = existingEntries.get(0);
                 log.info("Duplicate transaction detected. Returning existing ledger entry with RRN: {}", existingEntry.getRrn());
-                return BankResponse.builder()
-                        .status("SUCCESS")
-                        .rrn(existingEntry.getRrn())
-                        .failureReason(null)
-                        .build();
+                return BankResponse.success(existingEntry.getRrn(), request.getAccountVpa());
             }
 
             // 2. Look up account by VPA
@@ -108,11 +104,7 @@ public class BankService {
             ledgerEntryRepository.save(ledgerEntry);
             log.info("Successfully credited VPA: {}. New balance: {} paise. RRN: {}", request.getAccountVpa(), newBalance, rrn);
 
-            return BankResponse.builder()
-                    .status("SUCCESS")
-                    .rrn(rrn)
-                    .failureReason(null)
-                    .build();
+            return BankResponse.success(rrn, request.getAccountVpa());
 
         } finally {
             MDC.remove("transaction_id");

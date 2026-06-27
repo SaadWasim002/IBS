@@ -2,33 +2,28 @@ package com.upi.IBS.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.upi.IBS.dto.request.CreditRequest;
+import com.upi.IBS.dto.request.DebitRequest;
+import com.upi.IBS.dto.request.HmacSignRequest;
 import com.upi.IBS.dto.response.BankResponse;
+import com.upi.IBS.dto.response.HmacSignResponse;
 import com.upi.IBS.entity.LedgerEntry;
 import com.upi.IBS.service.BankService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
-import com.upi.IBS.dto.request.HmacSignRequest;
-import com.upi.IBS.dto.request.DebitRequest;
-import com.upi.IBS.dto.response.HmacSignResponse;
-import com.upi.IBS.dto.response.BankResponse;
-import com.upi.IBS.service.BankService;
-import lombok.extern.slf4j.Slf4j;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.beans.factory.annotation.Value;
-
-import java.util.Optional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 @Slf4j
@@ -37,7 +32,6 @@ public class BankController {
 
     private final ObjectMapper objectMapper;
     private final String hmacSecret;
-    private final BankService bankService;
     private final BankService bankService;
 
     @Autowired
@@ -88,8 +82,9 @@ public class BankController {
             log.error("Error generating HMAC signature", e);
             throw new RuntimeException("HMAC generation failed", e);
         }
+    }
 
-        @PostMapping("/bank/credit")
+    @PostMapping("/bank/credit")
     public ResponseEntity<BankResponse> credit(@Valid @RequestBody CreditRequest request) {
         try {
             BankResponse response = bankService.processCredit(request);
@@ -99,11 +94,7 @@ public class BankController {
             Optional<LedgerEntry> existing = bankService.getLedgerEntryByTransactionId(request.getTransactionId());
             if (existing.isPresent()) {
                 log.info("Idempotent recovery successful. Returning existing transaction details with RRN: {}", existing.get().getRrn());
-                BankResponse response = BankResponse.builder()
-                        .status("SUCCESS")
-                        .rrn(existing.get().getRrn())
-                        .failureReason(null)
-                        .build();
+                BankResponse response = BankResponse.success(existing.get().getRrn(), request.getAccountVpa());
                 return ResponseEntity.ok(response);
             }
             // If it wasn't a duplicate transaction ID violation, rethrow the exception
