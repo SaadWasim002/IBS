@@ -39,6 +39,9 @@ public class BankController {
             payloadMap.put("transaction_id", request.getTransactionId().toString());
             payloadMap.put("account_vpa", request.getAccountVpa());
             payloadMap.put("amount_paise", request.getAmountPaise());
+            if (request.getUpiPinHash() != null) {
+                payloadMap.put("upi_pin_hash", request.getUpiPinHash());
+            }
 
             // Serialize to JSON string
             String payloadJson = objectMapper.writeValueAsString(payloadMap);
@@ -54,6 +57,7 @@ public class BankController {
                     .transactionId(request.getTransactionId())
                     .accountVpa(request.getAccountVpa())
                     .amountPaise(request.getAmountPaise())
+                    .upiPinHash(request.getUpiPinHash())
                     .hmacSignature(signature)
                     .build();
 
