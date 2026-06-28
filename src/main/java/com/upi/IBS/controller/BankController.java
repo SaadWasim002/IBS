@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -27,13 +28,14 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
+@RequestMapping("/bank")
 @RequiredArgsConstructor
 public class BankController {
 
     private final BankService bankService;
     private final HmacSigningService hmacSigningService;
 
-    @PostMapping("/bank/debit")
+    @PostMapping("/debit")
     public ResponseEntity<BankResponse> debit(@RequestBody @Valid DebitRequest request) {
         try {
             BankResponse response = bankService.processDebit(request);
@@ -43,7 +45,7 @@ public class BankController {
         }
     }
 
-    @PostMapping("/bank/credit")
+    @PostMapping("/credit")
     public ResponseEntity<BankResponse> credit(@Valid @RequestBody CreditRequest request) {
         try {
             BankResponse response = bankService.processCredit(request);
@@ -53,19 +55,19 @@ public class BankController {
         }
     }
 
-    @PostMapping("/bank/sign")
+    @PostMapping("/sign")
     public ResponseEntity<HmacSignResponse> sign(@RequestBody HmacSignRequest request) {
         HmacSignResponse response = hmacSigningService.processSign(request);
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/bank/account/{vpa}/balance")
+    @GetMapping("/account/{vpa}/balance")
     public ResponseEntity<BalanceResponse> getBalance(@PathVariable String vpa) {
         BalanceResponse response = bankService.getAccountBalance(vpa);
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/bank/ledger/{transaction_id}")
+    @GetMapping("/ledger/{transaction_id}")
     public ResponseEntity<List<LedgerEntryResponse>> getLedgerTrail(@PathVariable("transaction_id") UUID transactionId) {
         List<LedgerEntryResponse> response = bankService.getLedgerTrail(transactionId);
         return ResponseEntity.ok(response);

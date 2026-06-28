@@ -44,6 +44,7 @@ public class BankService {
                     request.getAccountVpa(), request.getAmountPaise());
 
             // Step 1: Validate request and account state
+            validateVpaFormat(request.getAccountVpa());
             validateDuplicateTransaction(request.getTransactionId());
             Account account = findAndValidateAccount(request.getAccountVpa());
 
@@ -73,6 +74,7 @@ public class BankService {
                     request.getAccountVpa(), request.getAmountPaise());
 
             // Step 1: Idempotency Check
+            validateVpaFormat(request.getAccountVpa());
             validateDuplicateTransaction(request.getTransactionId());
 
             // Step 2: Find the destination account
