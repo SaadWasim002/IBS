@@ -79,7 +79,7 @@ public class BankService {
 
             // Step 1: Idempotency Check
             validateVpaFormat(request.getAccountVpa());
-            List<LedgerEntry> existing = ledgerEntryRepository.findByTransactionId(request.getTransactionId());
+            List<LedgerEntry> existing = ledgerEntryRepository.findByTransactionIdAndType(request.getTransactionId(), EntryType.CREDIT);
             if (!existing.isEmpty()) {
                 log.info("Idempotent credit request: transaction already processed. Returning existing RRN: {}", existing.get(0).getRrn());
                 return BankResponse.success(existing.get(0).getRrn(), request.getAccountVpa());
@@ -144,7 +144,7 @@ public class BankService {
     }
 
     private void validateDuplicateTransaction(UUID transactionId) {
-        if (ledgerEntryRepository.existsByTransactionId(transactionId)) {
+        if (ledgerEntryRepository.existsByTransactionIdAndType(transactionId, EntryType.DEBIT)) {
             log.warn("Duplicate transaction detected: {}", transactionId);
             throw new DuplicateTransactionException(transactionId);
         }
@@ -249,13 +249,13 @@ public class BankService {
             validateVpaFormat(request.getAccountVpa());
 
             // Step 2: Idempotency Check for Reversal Txn ID
-            List<LedgerEntry> existingReversal = ledgerEntryRepository.findByTransactionId(request.getReversalTxnId());
+            List<LedgerEntry> existingReversal = ledgerEntryRepository.findByTransactionIdAndType(request.getReversalTxnId(), EntryType.REVERSAL);
             if (!existingReversal.isEmpty()) {
                 log.info("Idempotent reversal request: transaction already processed. Returning existing RRN: {}", existingReversal.get(0).getRrn());
                 return BankResponse.success(existingReversal.get(0).getRrn(), request.getAccountVpa());
             }
 
-            if (ledgerEntryRepository.existsByTransactionId(request.getReversalTxnId())) {
+            if (ledgerEntryRepository.existsByTransactionIdAndType(request.getReversalTxnId(), EntryType.REVERSAL)) {
                 log.warn("Reversal transaction ID already exists (possible concurrent insertion): {}", request.getReversalTxnId());
                 throw new DuplicateTransactionException(request.getReversalTxnId());
             }
@@ -264,7 +264,7 @@ public class BankService {
             Account account = findAccount(request.getAccountVpa());
 
             // Step 4: Validate Original Debit Transaction
-            List<LedgerEntry> originalEntries = ledgerEntryRepository.findByTransactionId(request.getOriginalTxnId());
+            List<LedgerEntry> originalEntries = ledgerEntryRepository.findByTransactionIdAndType(request.getOriginalTxnId(), EntryType.DEBIT);
             if (originalEntries.isEmpty()) {
                 log.warn("Original transaction not found: {}", request.getOriginalTxnId());
                 throw new TransactionNotFoundException(request.getOriginalTxnId());

@@ -1,5 +1,6 @@
 package com.upi.IBS.repository;
 
+import com.upi.IBS.entity.EntryType;
 import com.upi.IBS.entity.LedgerEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -13,4 +14,8 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, UUID> 
     List<LedgerEntry> findByTransactionId(UUID transactionId);
 
     boolean existsByTransactionId(UUID transactionId);
+
+    List<LedgerEntry> findByTransactionIdAndType(UUID transactionId, EntryType type);
+
+    boolean existsByTransactionIdAndType(UUID transactionId, EntryType type);
 }

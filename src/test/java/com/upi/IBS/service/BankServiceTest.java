@@ -70,7 +70,7 @@ class BankServiceTest {
 
     @Test
     void processCredit_Success() {
-        when(ledgerEntryRepository.findByTransactionId(txnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(txnId, EntryType.CREDIT)).thenReturn(Collections.emptyList());
         when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
 
         BankResponse response = bankService.processCredit(creditRequest);
@@ -105,7 +105,7 @@ class BankServiceTest {
                 .rrn("RRN111111111111")
                 .build();
 
-        when(ledgerEntryRepository.findByTransactionId(txnId)).thenReturn(List.of(existingLedger));
+        when(ledgerEntryRepository.findByTransactionIdAndType(txnId, EntryType.CREDIT)).thenReturn(List.of(existingLedger));
 
         BankResponse response = bankService.processCredit(creditRequest);
 
@@ -121,7 +121,7 @@ class BankServiceTest {
 
     @Test
     void processCredit_AccountNotFound() {
-        when(ledgerEntryRepository.findByTransactionId(txnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(txnId, EntryType.CREDIT)).thenReturn(Collections.emptyList());
         when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.empty());
 
         assertThrows(AccountNotFoundException.class, () -> bankService.processCredit(creditRequest));
@@ -154,9 +154,9 @@ class BankServiceTest {
 
         testAccount.setDailyUsedPaise(2500L);
 
-        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(reversalTxnId, EntryType.REVERSAL)).thenReturn(Collections.emptyList());
         when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
-        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(List.of(originalDebitEntry));
+        when(ledgerEntryRepository.findByTransactionIdAndType(originalTxnId, EntryType.DEBIT)).thenReturn(List.of(originalDebitEntry));
 
         BankResponse response = bankService.processReversal(reversalRequest);
 
@@ -199,7 +199,7 @@ class BankServiceTest {
                 .amountPaise(2500L)
                 .build();
 
-        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(List.of(existingReversal));
+        when(ledgerEntryRepository.findByTransactionIdAndType(reversalTxnId, EntryType.REVERSAL)).thenReturn(List.of(existingReversal));
 
         BankResponse response = bankService.processReversal(reversalRequest);
 
@@ -224,9 +224,9 @@ class BankServiceTest {
                 .amountPaise(2500L)
                 .build();
 
-        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(reversalTxnId, EntryType.REVERSAL)).thenReturn(Collections.emptyList());
         when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
-        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(originalTxnId, EntryType.DEBIT)).thenReturn(Collections.emptyList());
 
         assertThrows(TransactionNotFoundException.class, () -> bankService.processReversal(reversalRequest));
 
@@ -255,9 +255,9 @@ class BankServiceTest {
                 .amountPaise(2500L)
                 .build();
 
-        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(ledgerEntryRepository.findByTransactionIdAndType(reversalTxnId, EntryType.REVERSAL)).thenReturn(Collections.emptyList());
         when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
-        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(List.of(originalDebitEntry));
+        when(ledgerEntryRepository.findByTransactionIdAndType(originalTxnId, EntryType.DEBIT)).thenReturn(List.of(originalDebitEntry));
 
         assertThrows(TransactionNotFoundException.class, () -> bankService.processReversal(reversalRequest));
 
