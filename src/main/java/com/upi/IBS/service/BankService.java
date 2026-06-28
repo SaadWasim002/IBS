@@ -77,6 +77,8 @@ public class BankService {
             log.info("Processing credit request for VPA: {}, amount: {} paise",
                     request.getAccountVpa(), request.getAmountPaise());
 
+            failureSimulatorService.checkAndTriggerFailure(request.getAccountVpa(), request.getAmountPaise());
+
             // Step 1: Idempotency Check
             validateVpaFormat(request.getAccountVpa());
             List<LedgerEntry> existing = ledgerEntryRepository.findByTransactionIdAndType(request.getTransactionId(), EntryType.CREDIT);

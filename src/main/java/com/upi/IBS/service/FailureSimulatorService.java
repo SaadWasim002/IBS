@@ -43,11 +43,11 @@ public class FailureSimulatorService {
                 try {
                     log.info("Simulating gateway timeout (sleeping for 6 seconds)...");
                     Thread.sleep(6000);
+                    throw new RuntimeException("Simulated gateway timeout");
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException("Timeout simulation interrupted", e);
                 }
-                break;
             default:
                 log.warn("Unknown simulated failure type: {}. Ignoring.", failureType);
         }
