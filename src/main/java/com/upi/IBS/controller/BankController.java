@@ -4,12 +4,14 @@ import com.upi.IBS.dto.request.CreditRequest;
 import com.upi.IBS.dto.request.DebitRequest;
 import com.upi.IBS.dto.request.HmacSignRequest;
 import com.upi.IBS.dto.request.ReversalRequest;
+import com.upi.IBS.dto.request.SimulateFailureRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.dto.response.BalanceResponse;
 import com.upi.IBS.dto.response.LedgerEntryResponse;
 import com.upi.IBS.dto.response.HmacSignResponse;
 import com.upi.IBS.entity.LedgerEntry;
 import com.upi.IBS.service.BankService;
+import com.upi.IBS.service.FailureSimulatorService;
 import com.upi.IBS.service.HmacSigningService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class BankController {
 
     private final BankService bankService;
     private final HmacSigningService hmacSigningService;
+    private final FailureSimulatorService failureSimulatorService;
 
     @PostMapping("/debit")
     public ResponseEntity<BankResponse> debit(@RequestBody @Valid DebitRequest request) {
@@ -70,6 +73,27 @@ public class BankController {
     public ResponseEntity<HmacSignResponse> sign(@RequestBody HmacSignRequest request) {
         HmacSignResponse response = hmacSigningService.processSign(request);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/simulate-failure")
+    public ResponseEntity<?> simulateFailure(@Valid @RequestBody SimulateFailureRequest request) {
+        if (request.isClear()) {
+            failureSimulatorService.clearFailure(request.getVpa());
+        } else {
+            if (request.getFailureType() == null || request.getFailureType().isBlank()) {
+                return ResponseEntity.badRequest().body("failure_type is required when clear is false");
+            }
+            String fType = request.getFailureType().toUpperCase();
+            if (!fType.equals("INSUFFICIENT_BALANCE") &&
+                !fType.equals("INVALID_PIN") &&
+                !fType.equals("LIMIT_EXCEEDED") &&
+                !fType.equals("TIMEOUT") &&
+                !fType.equals("ACCOUNT_LOCKED")) {
+                return ResponseEntity.badRequest().body("Unsupported failure_type: " + request.getFailureType());
+            }
+            failureSimulatorService.setFailure(request.getVpa(), request.getFailureType());
+        }
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/account/{vpa}/balance")

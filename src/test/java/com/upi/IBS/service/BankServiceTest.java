@@ -1,6 +1,7 @@
 package com.upi.IBS.service;
 
 import com.upi.IBS.dto.request.CreditRequest;
+import com.upi.IBS.dto.request.DebitRequest;
 import com.upi.IBS.dto.request.ReversalRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.entity.Account;
@@ -38,6 +39,9 @@ class BankServiceTest {
 
     @InjectMocks
     private BankService bankService;
+
+    @Mock
+    private FailureSimulatorService failureSimulatorService;
 
     private Account testAccount;
     private CreditRequest creditRequest;
@@ -259,5 +263,23 @@ class BankServiceTest {
 
         verify(accountRepository, never()).save(any());
         verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    void processDebit_SimulatedFailure() {
+        DebitRequest debitRequest = new DebitRequest();
+        debitRequest.setTransactionId(UUID.randomUUID());
+        debitRequest.setAccountVpa("riya@okhdfcbank");
+        debitRequest.setAmountPaise(1000L);
+        debitRequest.setUpiPinHash("pin-hash");
+        debitRequest.setHmacSignature("signature");
+
+        doThrow(new com.upi.IBS.exception.InsufficientBalanceException("riya@okhdfcbank", 0L, 1000L))
+                .when(failureSimulatorService).checkAndTriggerFailure("riya@okhdfcbank", 1000L);
+
+        assertThrows(com.upi.IBS.exception.InsufficientBalanceException.class,
+                () -> bankService.processDebit(debitRequest));
+
+        verify(accountRepository, never()).save(any());
     }
 }

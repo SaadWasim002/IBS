@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.upi.IBS.config.SecurityConfig;
 import com.upi.IBS.dto.request.CreditRequest;
 import com.upi.IBS.dto.request.ReversalRequest;
+import com.upi.IBS.dto.request.SimulateFailureRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.entity.Account;
 import com.upi.IBS.entity.LedgerEntry;
 import com.upi.IBS.exception.AccountNotFoundException;
 import com.upi.IBS.filter.HmacAuthFilter;
 import com.upi.IBS.service.BankService;
+import com.upi.IBS.service.FailureSimulatorService;
 import com.upi.IBS.service.HmacSigningService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,9 @@ class BankControllerTest {
 
     @MockitoBean
     private HmacSigningService hmacSigningService;
+
+    @MockitoBean
+    private FailureSimulatorService failureSimulatorService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -266,5 +271,60 @@ class BankControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("FAILURE"))
                 .andExpect(jsonPath("$.failure_reason").exists());
+    }
+
+    @Test
+    void simulateFailure_SetSuccess() throws Exception {
+        SimulateFailureRequest request = SimulateFailureRequest.builder()
+                .vpa("saad@okaxis")
+                .failureType("INSUFFICIENT_BALANCE")
+                .clear(false)
+                .build();
+
+        mockMvc.perform(post("/bank/simulate-failure")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void simulateFailure_ClearSuccess() throws Exception {
+        SimulateFailureRequest request = SimulateFailureRequest.builder()
+                .vpa("saad@okaxis")
+                .clear(true)
+                .build();
+
+        mockMvc.perform(post("/bank/simulate-failure")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void simulateFailure_MissingTypeWhenNotClear() throws Exception {
+        SimulateFailureRequest request = SimulateFailureRequest.builder()
+                .vpa("saad@okaxis")
+                .failureType("")
+                .clear(false)
+                .build();
+
+        mockMvc.perform(post("/bank/simulate-failure")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void simulateFailure_UnsupportedType() throws Exception {
+        SimulateFailureRequest request = SimulateFailureRequest.builder()
+                .vpa("saad@okaxis")
+                .failureType("UNSUPPORTED_ERROR")
+                .clear(false)
+                .build();
+
+        mockMvc.perform(post("/bank/simulate-failure")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 }

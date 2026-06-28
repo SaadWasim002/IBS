@@ -36,6 +36,7 @@ public class BankService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AccountLockService accountLockService;
+    private final FailureSimulatorService failureSimulatorService;
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public BankResponse processDebit(DebitRequest request) {
@@ -43,6 +44,8 @@ public class BankService {
         try {
             log.info("Processing debit for VPA: {} amount: {} paise",
                     request.getAccountVpa(), request.getAmountPaise());
+
+            failureSimulatorService.checkAndTriggerFailure(request.getAccountVpa(), request.getAmountPaise());
 
             // Step 1: Validate request and account state
             validateVpaFormat(request.getAccountVpa());
