@@ -16,6 +16,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findByVpa(String vpa);
 
     @Modifying
-    @Query("UPDATE Account a SET a.dailyUsedPaise = 0")
+    @Query("UPDATE Account a SET a.dailyUsedPaise = 0, a.pinLocked = false, a.pinAttemptCount = 0")
     void resetDailyLimits();
 }
