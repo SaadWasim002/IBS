@@ -2,6 +2,7 @@ package com.upi.IBS.controller;
 
 import com.upi.IBS.dto.request.AddAccountRequest;
 import com.upi.IBS.entity.Account;
+import com.upi.IBS.exception.InvalidVpaException;
 import com.upi.IBS.repository.AccountRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,11 @@ public class TestAccountController {
 
     @PostMapping("/bank/test/add-account")
     public ResponseEntity<?> addTestAccount(@RequestBody @Valid AddAccountRequest request) {
+        // Validate VPA format before database lookup
+        if (request.getVpa() == null || !request.getVpa().matches("^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$")) {
+            throw new InvalidVpaException(request.getVpa());
+        }
+
         if (accountRepository.findByVpa(request.getVpa()).isPresent()) {
             return ResponseEntity.badRequest().body("Account with VPA '" + request.getVpa() + "' already exists.");
         }

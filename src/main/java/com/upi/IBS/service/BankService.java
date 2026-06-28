@@ -3,6 +3,8 @@ package com.upi.IBS.service;
 import com.upi.IBS.dto.request.CreditRequest;
 import com.upi.IBS.dto.request.DebitRequest;
 import com.upi.IBS.dto.response.BankResponse;
+import com.upi.IBS.dto.response.BalanceResponse;
+import com.upi.IBS.dto.response.LedgerEntryResponse;
 import com.upi.IBS.entity.Account;
 import com.upi.IBS.entity.EntryType;
 import com.upi.IBS.entity.LedgerEntry;
@@ -42,6 +44,7 @@ public class BankService {
                     request.getAccountVpa(), request.getAmountPaise());
 
             // Step 1: Validate request and account state
+            validateVpaFormat(request.getAccountVpa());
             validateDuplicateTransaction(request.getTransactionId());
             Account account = findAndValidateAccount(request.getAccountVpa());
 
@@ -71,6 +74,7 @@ public class BankService {
                     request.getAccountVpa(), request.getAmountPaise());
 
             // Step 1: Idempotency Check
+            validateVpaFormat(request.getAccountVpa());
             validateDuplicateTransaction(request.getTransactionId());
 
             // Step 2: Find the destination account
@@ -86,9 +90,49 @@ public class BankService {
     }
 
     @Transactional(readOnly = true)
+    public BalanceResponse getAccountBalance(String vpa) {
+        log.info("Fetching account balance details for VPA: {}", vpa);
+        Account account = findAccount(vpa);
+        return BalanceResponse.builder()
+                .vpa(account.getVpa())
+                .balancePaise(account.getBalancePaise())
+                .dailyLimitPaise(account.getDailyLimitPaise())
+                .dailyUsedPaise(account.getDailyUsedPaise())
+                .pinLocked(account.isPinLocked())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<LedgerEntryResponse> getLedgerTrail(UUID transactionId) {
+        log.info("Fetching ledger trail for transaction ID: {}", transactionId);
+        List<LedgerEntry> entries = ledgerEntryRepository.findByTransactionId(transactionId);
+        if (entries.isEmpty()) {
+            throw new TransactionNotFoundException(transactionId);
+        }
+        return entries.stream()
+                .map(entry -> LedgerEntryResponse.builder()
+                        .entryId(entry.getEntryId())
+                        .transactionId(entry.getTransactionId())
+                        .accountVpa(entry.getAccount().getVpa())
+                        .type(entry.getType())
+                        .amountPaise(entry.getAmountPaise())
+                        .rrn(entry.getRrn())
+                        .createdAt(entry.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public Optional<LedgerEntry> getLedgerEntryByTransactionId(UUID transactionId) {
         List<LedgerEntry> entries = ledgerEntryRepository.findByTransactionId(transactionId);
         return entries.isEmpty() ? Optional.empty() : Optional.of(entries.get(0));
+    }
+
+    private void validateVpaFormat(String vpa) {
+        if (vpa == null || !vpa.matches("^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$")) {
+            log.warn("Invalid VPA format: {}", vpa);
+            throw new InvalidVpaException(vpa);
+        }
     }
 
     private void validateDuplicateTransaction(UUID transactionId) {
@@ -99,6 +143,7 @@ public class BankService {
     }
 
     private Account findAccount(String vpa) {
+        validateVpaFormat(vpa);
         return accountRepository.findByVpa(vpa)
                 .orElseThrow(() -> new AccountNotFoundException(vpa));
     }
