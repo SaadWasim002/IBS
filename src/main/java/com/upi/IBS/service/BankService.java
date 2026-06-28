@@ -67,45 +67,19 @@ public class BankService {
     public BankResponse processCredit(CreditRequest request) {
         MDC.put("transaction_id", request.getTransactionId().toString());
         try {
-            log.info("Processing credit request for VPA: {}, amount: {} paise", request.getAccountVpa(), request.getAmountPaise());
+            log.info("Processing credit request for VPA: {}, amount: {} paise",
+                    request.getAccountVpa(), request.getAmountPaise());
 
-            // 1. Idempotency Check: Check if transaction has already been processed
-            List<LedgerEntry> existingEntries = ledgerEntryRepository.findByTransactionId(request.getTransactionId());
-            if (!existingEntries.isEmpty()) {
-                LedgerEntry existingEntry = existingEntries.get(0);
-                log.info("Duplicate transaction detected. Returning existing ledger entry with RRN: {}", existingEntry.getRrn());
-                return BankResponse.success(existingEntry.getRrn(), request.getAccountVpa());
-            }
+            // Step 1: Idempotency Check
+            validateDuplicateTransaction(request.getTransactionId());
 
-            // 2. Look up account by VPA
-            Account account = accountRepository.findByVpa(request.getAccountVpa())
-                    .orElseThrow(() -> {
-                        log.warn("Account not found for VPA: {}", request.getAccountVpa());
-                        return new AccountNotFoundException(request.getAccountVpa());
-                    });
+            // Step 2: Find the destination account
+            Account account = findAccount(request.getAccountVpa());
 
-            // 3. Increment the balance
-            long newBalance = account.getBalancePaise() + request.getAmountPaise();
-            account.setBalancePaise(newBalance);
-            accountRepository.save(account);
-
-            // 4. Generate RRN (12 digits)
-            String rrn = "RRN" + (100000000000L + (long) (Math.random() * 900000000000L));
-
-            // 5. Create Ledger Entry
-            LedgerEntry ledgerEntry = LedgerEntry.builder()
-                    .transactionId(request.getTransactionId())
-                    .account(account)
-                    .type(EntryType.CREDIT)
-                    .amountPaise(request.getAmountPaise())
-                    .rrn(rrn)
-                    .build();
-
-            ledgerEntryRepository.save(ledgerEntry);
-            log.info("Successfully credited VPA: {}. New balance: {} paise. RRN: {}", request.getAccountVpa(), newBalance, rrn);
+            // Step 3: Execute credit transaction
+            String rrn = executeCredit(account, request);
 
             return BankResponse.success(rrn, request.getAccountVpa());
-
         } finally {
             MDC.remove("transaction_id");
         }
@@ -124,10 +98,13 @@ public class BankService {
         }
     }
 
-    private Account findAndValidateAccount(String vpa) {
-        Account account = accountRepository.findByVpa(vpa)
+    private Account findAccount(String vpa) {
+        return accountRepository.findByVpa(vpa)
                 .orElseThrow(() -> new AccountNotFoundException(vpa));
+    }
 
+    private Account findAndValidateAccount(String vpa) {
+        Account account = findAccount(vpa);
         if (account.isPinLocked()) {
             log.warn("Account is PIN locked: {}", vpa);
             throw new AccountLockedException(vpa);
@@ -136,8 +113,6 @@ public class BankService {
     }
 
     private void verifyPin(Account account, String rawPin) {
-        // Note: The request field is named `upiPinHash`, but it should contain the raw PIN
-        // for bcrypt's `matches` method to work correctly.
         log.info("Stored Hash: {} - Incoming PIN: {}", account.getUpiPinHash(), rawPin);
         if (passwordEncoder.matches(rawPin, account.getUpiPinHash())) {
             return; // PIN is correct
@@ -163,6 +138,18 @@ public class BankService {
         }
     }
 
+    private void createAndSaveLedgerEntry(UUID transactionId, Account account, EntryType type, Long amountPaise,
+            String rrn) {
+        LedgerEntry entry = LedgerEntry.builder()
+                .transactionId(transactionId)
+                .account(account)
+                .type(type)
+                .amountPaise(amountPaise)
+                .rrn(rrn)
+                .build();
+        ledgerEntryRepository.save(entry);
+    }
+
     private String executeDebit(Account account, DebitRequest request) {
         // Update account state
         account.setBalancePaise(account.getBalancePaise() - request.getAmountPaise());
@@ -172,14 +159,21 @@ public class BankService {
 
         // Create ledger entry
         String rrn = generateRrn();
-        LedgerEntry entry = LedgerEntry.builder()
-                .transactionId(request.getTransactionId())
-                .account(account)
-                .type(EntryType.DEBIT)
-                .amountPaise(request.getAmountPaise())
-                .rrn(rrn)
-                .build();
-        ledgerEntryRepository.save(entry);
+        createAndSaveLedgerEntry(request.getTransactionId(), account, EntryType.DEBIT, request.getAmountPaise(), rrn);
+        return rrn;
+    }
+
+    private String executeCredit(Account account, CreditRequest request) {
+        // Update account state
+        account.setBalancePaise(account.getBalancePaise() + request.getAmountPaise());
+        accountRepository.save(account);
+
+        // Create ledger entry
+        String rrn = generateRrn();
+        createAndSaveLedgerEntry(request.getTransactionId(), account, EntryType.CREDIT, request.getAmountPaise(), rrn);
+
+        log.info("Successfully credited VPA: {}. New balance: {} paise. RRN: {}",
+                request.getAccountVpa(), account.getBalancePaise(), rrn);
         return rrn;
     }
 
