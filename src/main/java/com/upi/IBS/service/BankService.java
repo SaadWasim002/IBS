@@ -106,6 +106,9 @@ public class BankService {
     public List<LedgerEntryResponse> getLedgerTrail(UUID transactionId) {
         log.info("Fetching ledger trail for transaction ID: {}", transactionId);
         List<LedgerEntry> entries = ledgerEntryRepository.findByTransactionId(transactionId);
+        if (entries.isEmpty()) {
+            throw new TransactionNotFoundException(transactionId);
+        }
         return entries.stream()
                 .map(entry -> LedgerEntryResponse.builder()
                         .entryId(entry.getEntryId())

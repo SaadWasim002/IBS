@@ -54,6 +54,12 @@ public class GlobalExceptionHandler {
                 .body(BankResponse.failure(ex.getMessage(), null));
     }
 
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ResponseEntity<BankResponse> handleTransactionNotFound(TransactionNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(BankResponse.failure("TRANSACTION_NOT_FOUND", null));
+    }
+
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<BankResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
