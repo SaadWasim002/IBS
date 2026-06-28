@@ -48,6 +48,12 @@ public class GlobalExceptionHandler {
                 .body(BankResponse.failure("DUPLICATE_TRANSACTION", null));
     }
 
+    @ExceptionHandler(InvalidVpaException.class)
+    public ResponseEntity<BankResponse> handleInvalidVpa(InvalidVpaException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(BankResponse.failure(ex.getMessage(), null));
+    }
+
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<BankResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
