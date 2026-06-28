@@ -2,6 +2,7 @@ package com.upi.IBS.service;
 
 import com.upi.IBS.dto.request.CreditRequest;
 import com.upi.IBS.dto.request.DebitRequest;
+import com.upi.IBS.dto.request.ReversalRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.dto.response.BalanceResponse;
 import com.upi.IBS.dto.response.LedgerEntryResponse;
@@ -75,7 +76,11 @@ public class BankService {
 
             // Step 1: Idempotency Check
             validateVpaFormat(request.getAccountVpa());
-            validateDuplicateTransaction(request.getTransactionId());
+            List<LedgerEntry> existing = ledgerEntryRepository.findByTransactionId(request.getTransactionId());
+            if (!existing.isEmpty()) {
+                log.info("Idempotent credit request: transaction already processed. Returning existing RRN: {}", existing.get(0).getRrn());
+                return BankResponse.success(existing.get(0).getRrn(), request.getAccountVpa());
+            }
 
             // Step 2: Find the destination account
             Account account = findAccount(request.getAccountVpa());
@@ -228,5 +233,71 @@ public class BankService {
         // Using a more robust random number generator and ensuring 4 digits
         String random = String.format("%04d", new SecureRandom().nextInt(10000));
         return "RRN" + timestamp + random;
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public BankResponse processReversal(ReversalRequest request) {
+        MDC.put("transaction_id", request.getReversalTxnId().toString());
+        try {
+            log.info("Processing reversal. Original Txn: {}, Reversal Txn: {}, VPA: {}, Amount: {} paise",
+                    request.getOriginalTxnId(), request.getReversalTxnId(), request.getAccountVpa(), request.getAmountPaise());
+
+            // Step 1: Validate VPA format
+            validateVpaFormat(request.getAccountVpa());
+
+            // Step 2: Idempotency Check for Reversal Txn ID
+            List<LedgerEntry> existingReversal = ledgerEntryRepository.findByTransactionId(request.getReversalTxnId());
+            if (!existingReversal.isEmpty()) {
+                log.info("Idempotent reversal request: transaction already processed. Returning existing RRN: {}", existingReversal.get(0).getRrn());
+                return BankResponse.success(existingReversal.get(0).getRrn(), request.getAccountVpa());
+            }
+
+            if (ledgerEntryRepository.existsByTransactionId(request.getReversalTxnId())) {
+                log.warn("Reversal transaction ID already exists (possible concurrent insertion): {}", request.getReversalTxnId());
+                throw new DuplicateTransactionException(request.getReversalTxnId());
+            }
+
+            // Step 3: Find Account
+            Account account = findAccount(request.getAccountVpa());
+
+            // Step 4: Validate Original Debit Transaction
+            List<LedgerEntry> originalEntries = ledgerEntryRepository.findByTransactionId(request.getOriginalTxnId());
+            if (originalEntries.isEmpty()) {
+                log.warn("Original transaction not found: {}", request.getOriginalTxnId());
+                throw new TransactionNotFoundException(request.getOriginalTxnId());
+            }
+
+            LedgerEntry originalEntry = originalEntries.get(0);
+            if (originalEntry.getType() != EntryType.DEBIT) {
+                log.warn("Original transaction is not a DEBIT: {} (type is {})", request.getOriginalTxnId(), originalEntry.getType());
+                throw new TransactionNotFoundException(request.getOriginalTxnId());
+            }
+            if (!originalEntry.getAccount().getVpa().equalsIgnoreCase(request.getAccountVpa())) {
+                log.warn("Original transaction VPA mismatch: expected {}, but request was {}", originalEntry.getAccount().getVpa(), request.getAccountVpa());
+                throw new TransactionNotFoundException(request.getOriginalTxnId());
+            }
+            if (!originalEntry.getAmountPaise().equals(request.getAmountPaise())) {
+                log.warn("Original transaction amount mismatch: expected {}, but request was {}", originalEntry.getAmountPaise(), request.getAmountPaise());
+                throw new TransactionNotFoundException(request.getOriginalTxnId());
+            }
+
+            // Step 5: Execute Reversal
+            // Credit the account back
+            account.setBalancePaise(account.getBalancePaise() + request.getAmountPaise());
+            // Reduce daily limit usage (making sure it doesn't go below 0)
+            account.setDailyUsedPaise(Math.max(0L, account.getDailyUsedPaise() - request.getAmountPaise()));
+            accountRepository.save(account);
+
+            // Create ledger entry
+            String rrn = generateRrn();
+            createAndSaveLedgerEntry(request.getReversalTxnId(), account, EntryType.REVERSAL, request.getAmountPaise(), rrn);
+
+            log.info("Reversal successful. VPA: {}, RRN: {}, Amount: {} paise refunded",
+                    request.getAccountVpa(), rrn, request.getAmountPaise());
+
+            return BankResponse.success(rrn, request.getAccountVpa());
+        } finally {
+            MDC.remove("transaction_id");
+        }
     }
 }

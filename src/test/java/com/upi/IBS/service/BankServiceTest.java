@@ -1,11 +1,14 @@
 package com.upi.IBS.service;
 
 import com.upi.IBS.dto.request.CreditRequest;
+import com.upi.IBS.dto.request.ReversalRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.entity.Account;
 import com.upi.IBS.entity.EntryType;
 import com.upi.IBS.entity.LedgerEntry;
 import com.upi.IBS.exception.AccountNotFoundException;
+import com.upi.IBS.exception.TransactionNotFoundException;
+import com.upi.IBS.exception.DuplicateTransactionException;
 import com.upi.IBS.repository.AccountRepository;
 import com.upi.IBS.repository.LedgerEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -120,6 +123,140 @@ class BankServiceTest {
         assertThrows(AccountNotFoundException.class, () -> bankService.processCredit(creditRequest));
 
         // Verify balance not changed and no ledger written
+        verify(accountRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    void processReversal_Success() {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        LedgerEntry originalDebitEntry = LedgerEntry.builder()
+                .entryId(UUID.randomUUID())
+                .transactionId(originalTxnId)
+                .account(testAccount)
+                .type(EntryType.DEBIT)
+                .amountPaise(2500L)
+                .rrn("RRN222222222222")
+                .build();
+
+        ReversalRequest reversalRequest = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa("riya@okhdfcbank")
+                .amountPaise(2500L)
+                .build();
+
+        testAccount.setDailyUsedPaise(2500L);
+
+        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
+        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(List.of(originalDebitEntry));
+
+        BankResponse response = bankService.processReversal(reversalRequest);
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        assertNotNull(response.getRrn());
+
+        assertEquals(7500L, testAccount.getBalancePaise());
+        assertEquals(0L, testAccount.getDailyUsedPaise());
+
+        verify(accountRepository, times(1)).save(testAccount);
+
+        ArgumentCaptor<LedgerEntry> ledgerCaptor = ArgumentCaptor.forClass(LedgerEntry.class);
+        verify(ledgerEntryRepository, times(1)).save(ledgerCaptor.capture());
+        LedgerEntry savedLedger = ledgerCaptor.getValue();
+        assertEquals(reversalTxnId, savedLedger.getTransactionId());
+        assertEquals(EntryType.REVERSAL, savedLedger.getType());
+        assertEquals(2500L, savedLedger.getAmountPaise());
+        assertEquals(testAccount, savedLedger.getAccount());
+    }
+
+    @Test
+    void processReversal_Idempotency() {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        LedgerEntry existingReversal = LedgerEntry.builder()
+                .entryId(UUID.randomUUID())
+                .transactionId(reversalTxnId)
+                .account(testAccount)
+                .type(EntryType.REVERSAL)
+                .amountPaise(2500L)
+                .rrn("RRN888888888888")
+                .build();
+
+        ReversalRequest reversalRequest = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa("riya@okhdfcbank")
+                .amountPaise(2500L)
+                .build();
+
+        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(List.of(existingReversal));
+
+        BankResponse response = bankService.processReversal(reversalRequest);
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        assertEquals("RRN888888888888", response.getRrn());
+
+        assertEquals(5000L, testAccount.getBalancePaise());
+        verify(accountRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    void processReversal_OriginalTxnNotFound() {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        ReversalRequest reversalRequest = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa("riya@okhdfcbank")
+                .amountPaise(2500L)
+                .build();
+
+        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
+        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(Collections.emptyList());
+
+        assertThrows(TransactionNotFoundException.class, () -> bankService.processReversal(reversalRequest));
+
+        verify(accountRepository, never()).save(any());
+        verify(ledgerEntryRepository, never()).save(any());
+    }
+
+    @Test
+    void processReversal_OriginalTxnMismatch() {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        LedgerEntry originalDebitEntry = LedgerEntry.builder()
+                .entryId(UUID.randomUUID())
+                .transactionId(originalTxnId)
+                .account(testAccount)
+                .type(EntryType.DEBIT)
+                .amountPaise(5000L)
+                .rrn("RRN222222222222")
+                .build();
+
+        ReversalRequest reversalRequest = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa("riya@okhdfcbank")
+                .amountPaise(2500L)
+                .build();
+
+        when(ledgerEntryRepository.findByTransactionId(reversalTxnId)).thenReturn(Collections.emptyList());
+        when(accountRepository.findByVpa("riya@okhdfcbank")).thenReturn(Optional.of(testAccount));
+        when(ledgerEntryRepository.findByTransactionId(originalTxnId)).thenReturn(List.of(originalDebitEntry));
+
+        assertThrows(TransactionNotFoundException.class, () -> bankService.processReversal(reversalRequest));
+
         verify(accountRepository, never()).save(any());
         verify(ledgerEntryRepository, never()).save(any());
     }

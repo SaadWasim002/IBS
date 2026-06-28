@@ -3,12 +3,14 @@ package com.upi.IBS.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.upi.IBS.config.SecurityConfig;
 import com.upi.IBS.dto.request.CreditRequest;
+import com.upi.IBS.dto.request.ReversalRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.entity.Account;
 import com.upi.IBS.entity.LedgerEntry;
 import com.upi.IBS.exception.AccountNotFoundException;
 import com.upi.IBS.filter.HmacAuthFilter;
 import com.upi.IBS.service.BankService;
+import com.upi.IBS.service.HmacSigningService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,9 @@ class BankControllerTest {
 
     @MockitoBean
     private BankService bankService;
+
+    @MockitoBean
+    private HmacSigningService hmacSigningService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -171,5 +176,95 @@ class BankControllerTest {
                         .content(jsonPayload))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Invalid HMAC signature."));
+    }
+
+    @Test
+    void reversal_Success() throws Exception {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+        BankResponse bankResponse = BankResponse.builder()
+                .status("SUCCESS")
+                .rrn("RRN888888888888")
+                .build();
+
+        when(bankService.processReversal(any(ReversalRequest.class))).thenReturn(bankResponse);
+
+        ReversalRequest request = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa(testVpa)
+                .amountPaise(testAmount)
+                .build();
+
+        mockMvc.perform(post("/bank/reversal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.rrn").value("RRN888888888888"))
+                .andExpect(jsonPath("$.failure_reason").doesNotExist());
+    }
+
+    @Test
+    void reversal_OriginalTxnNotFound() throws Exception {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        when(bankService.processReversal(any(ReversalRequest.class)))
+                .thenThrow(new com.upi.IBS.exception.TransactionNotFoundException(originalTxnId));
+
+        ReversalRequest request = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa(testVpa)
+                .amountPaise(testAmount)
+                .build();
+
+        mockMvc.perform(post("/bank/reversal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("FAILURE"))
+                .andExpect(jsonPath("$.failure_reason").value("TRANSACTION_NOT_FOUND"));
+    }
+
+    @Test
+    void reversal_DuplicateReversalApplied() throws Exception {
+        UUID originalTxnId = UUID.randomUUID();
+        UUID reversalTxnId = UUID.randomUUID();
+
+        when(bankService.processReversal(any(ReversalRequest.class)))
+                .thenThrow(new com.upi.IBS.exception.DuplicateTransactionException(reversalTxnId));
+
+        ReversalRequest request = ReversalRequest.builder()
+                .originalTxnId(originalTxnId)
+                .reversalTxnId(reversalTxnId)
+                .accountVpa(testVpa)
+                .amountPaise(testAmount)
+                .build();
+
+        mockMvc.perform(post("/bank/reversal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value("FAILURE"))
+                .andExpect(jsonPath("$.failure_reason").value("DUPLICATE_TRANSACTION"));
+    }
+
+    @Test
+    void reversal_ValidationFailure() throws Exception {
+        ReversalRequest request = ReversalRequest.builder()
+                .originalTxnId(null)
+                .reversalTxnId(UUID.randomUUID())
+                .accountVpa("invalid-vpa")
+                .amountPaise(-100L)
+                .build();
+
+        mockMvc.perform(post("/bank/reversal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value("FAILURE"))
+                .andExpect(jsonPath("$.failure_reason").exists());
     }
 }

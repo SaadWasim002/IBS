@@ -3,6 +3,7 @@ package com.upi.IBS.controller;
 import com.upi.IBS.dto.request.CreditRequest;
 import com.upi.IBS.dto.request.DebitRequest;
 import com.upi.IBS.dto.request.HmacSignRequest;
+import com.upi.IBS.dto.request.ReversalRequest;
 import com.upi.IBS.dto.response.BankResponse;
 import com.upi.IBS.dto.response.BalanceResponse;
 import com.upi.IBS.dto.response.LedgerEntryResponse;
@@ -52,6 +53,16 @@ public class BankController {
             return ResponseEntity.ok(response);
         } catch (DataIntegrityViolationException e) {
             return handleIdempotentRecovery(request.getTransactionId(), request.getAccountVpa(), e);
+        }
+    }
+
+    @PostMapping("/reversal")
+    public ResponseEntity<BankResponse> reversal(@Valid @RequestBody ReversalRequest request) {
+        try {
+            BankResponse response = bankService.processReversal(request);
+            return ResponseEntity.ok(response);
+        } catch (DataIntegrityViolationException e) {
+            return handleIdempotentRecovery(request.getReversalTxnId(), request.getAccountVpa(), e);
         }
     }
 

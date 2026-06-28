@@ -73,6 +73,6 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("Validation failed");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(BankResponse.failure(message, null));
+                .body(BankResponse.failure("VALIDATION_FAILED: " + message, null));
     }
 }
